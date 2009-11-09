@@ -77,16 +77,21 @@ my $pod_paragraph_qr = qr{
 =head2 parse_pod_from_string
 
 Given a string, parses for pod and, in scalar context, returns an AoH
-describing each pod paragraph (aka 'piece') found. In list context, a
-copy of the original string with all pod stripped out is also returned.
+describing each pod paragraph found, as well as any non-pod. In list context,
+a copy of the original string with all pod stripped out is also returned.
 
  # typical usage
- my $pod_pieces = parse_pod_from_string( $text );
+ my $pieces = parse_pod_from_string( $text );
+
+ # to separate pod and non-pod
+ my @pod_pieces     = grep { ! exists $_->{non_pod} } @$pieces;
+ my @non_pod_pieces = grep {   exists $_->{non_pod} } @$pieces;
 
  # if you want a copy of the text sans pod...
- my ( $pod_pieces, $txt_nopod ) = parse_pod_from_string( $text );
+ my ( $pieces, $txt_nopod ) = parse_pod_from_string( $text );
 
 =cut
+# NOTE: the 'c' modifiers on the regexes in this sub are *critical!* NO TOUCH!
 sub parse_pod_from_string {
     my ( $text ) = @_;
 
@@ -97,25 +102,34 @@ sub parse_pod_from_string {
 
     # find the beginning of the next pod block in the text
     # (which, by definition, is any pod command)
-    while ( $text =~ m{ \G .*? $pod_command_qr }msxg ) {
-        my $cmd_type  = $2 || $5;
-        my $cmd_level = $3 || '';
-        my $cmd_text  = $4 || $6 || '';
+    while ( $text =~ m{ \G (.*?) $pod_command_qr }msxgc ) {
+        my $non_pod   = $1;
+        my $cmd_type  = $3 || $6;
+        my $cmd_level = $4 || '';
+        my $cmd_text  = $5 || $7 || '';
 
         #print "COMMAND: [=$cmd_type$cmd_level $cmd_text]\n\n"; ### DEBUG
 
-        push @pod_pieces, {
-            type      => $cmd_type,
-            level     => $cmd_level,
-            text      => $cmd_text,
+        # record the text that wasn't pod, if any
+        push @pod_pieces, { 
+            non_pod   => $non_pod,
             start_pos => $LAST_MATCH_START[1],
             end_pos   => $LAST_MATCH_END[1],
+        } if $non_pod;
+
+        # record the pod found
+        push @pod_pieces, {
+            cmd_type  => $cmd_type,
+            cmd_level => $cmd_level,
+            cmd_text  => $cmd_text,
+            start_pos => $LAST_MATCH_START[2],
+            end_pos   => $LAST_MATCH_END[2],
         };
 
         # cut *always* signifies the end of a block of pod
         next if $cmd_type eq 'cut';
 
-        # the c modifier on this regex is critical!
+        # look for paragraphs within the current pod block
         while ( $text =~ m{ \G $pod_paragraph_qr }msxgc ) {
             my $paragraph = $2;
 
@@ -128,6 +142,18 @@ sub parse_pod_from_string {
             };
         }
     }
+
+    # Take care of any remaining text in the string
+    my $last_pos  = pos( $text );
+    my $end_pos   = length( $text ) - 1;
+    my $remainder = substr( $text, $last_pos );
+    push @pod_pieces, { 
+        non_pod   => $remainder,
+        start_pos => $last_pos,
+        end_pos   => $end_pos,
+    } if $remainder;
+
+
     if ( wantarray ) {
         strip_pod_from_string( \$text, \@pod_pieces );
         return ( \@pod_pieces, $text );
@@ -150,8 +176,8 @@ string and the array of pod parts as return values.
   # pass in a ref to change string in-place...
   strip_pod_from_string( \$text );   # $text no longer contains any pod
   
-  # if you need the pod pieces...
-  my ( $txt_nopod, $pod_pieces ) = strip_pod_from_string( $text );
+  # if you need the pieces...
+  my ( $txt_nopod, $pieces ) = strip_pod_from_string( $text );
   
   # if you already have the pod pieces...
   my $txt_nopod = strip_pod_from_string( $text, $pod_pieces );
@@ -167,6 +193,9 @@ sub strip_pod_from_string {
 
     my $shrinkage = 0;
     for my $pp ( @$pod_pieces ) {
+        
+        next if defined $pp->{non_pod};
+
         my $length      = $pp->{end_pos}   - $pp->{start_pos};
         my $new_start   = $pp->{start_pos} - $shrinkage;
         $pp->{orig_pod} = substr( $$text_ref, $new_start, $length, '' );
@@ -253,20 +282,12 @@ A Pod block is a series of paragraphs beginning with any directive except
 "=cut" and ending with the first occurence of a "=cut" directive or the
 end of the input, whichever comes first.
 
-=head2 section
+=head2 piece
 
-This is a term I'm introducting myself. A Pod section is a piece of a
-Pod block beginning at a directive and continuing until just before the next
-directive or the end of the input.
-
-=head1 NOTES
-
-need to map out what the corresponding "end" command is for any "beginning"
-command. for example, =cut is *always* an end command - for parsing, but
-not necessarily for the current level of command nesting.
-
-Best strategy may be to extract all POD from the file *then* figure
-out the structure of the POD as a separate document
-
+This is a term I'm introducting myself. A piece is just a hash containing info
+on a parsed piece of the original string. Each piece is either pod or not pod. 
+If it's pod it describes the kind of pod. If it's not, it contains a 'non_pod' 
+entry. All pieces also include the start and end offsets into the original 
+string (starting at 0) as 'start_pos' and 'end_pos', respectively.
 
 

@@ -17,13 +17,14 @@ use SRS::Pod::Parser qw( parse_pod_from_string );
 # stripped version and assert they're the same.
 for my $file ( @ARGV ) {
     my $text = read_file( $file );
-    my ( $pod_paragraphs, $stripped_text ) = parse_pod_from_string( $text );
+    my ( $pieces, $stripped_text ) = parse_pod_from_string( $text );
 
-    #print Dumper $pod_paragraphs;
-    print $stripped_text;
+#    print Dumper $pieces;
+#    print $stripped_text;
 
+    # put the pod back in the stripped text, just to test...
     substr( $stripped_text, $_->{start_pos}, 0, $_->{orig_pod} ) 
-        for @$pod_paragraphs;
+        for grep { ! exists $_->{non_pod} } @$pieces;
 
     print $stripped_text eq $text ? "ok\n" : "not ok\n";
 }
@@ -119,5 +120,8 @@ not necessarily for the current level of command nesting.
 Best strategy may be to extract all POD from the file *then* figure
 out the structure of the POD as a separate document
 
+=cut
+
+foo
 
 
