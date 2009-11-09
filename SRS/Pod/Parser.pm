@@ -10,6 +10,12 @@ our @EXPORT = qw();
 our @EXPORT_OK = qw( parse_pod_from_string );
 
 
+# right now, I've hard-coded unix EOL into these regexen... I probably
+# should use \R, however it's not supported on older perls, though the
+# docs say it's equivalent to this:
+my $eol = qr{ (?>\x0D\x0A?|[\x0A-\x0C\x85\x{2028}\x{2029}]) };
+
+
 =for comment
 
 match the end of any pod paragraph (pp). I'm being generous by allowing
@@ -144,7 +150,7 @@ sub parse_pod_from_string {
     }
 
     # Take care of any remaining text in the string
-    my $last_pos  = pos( $text );
+    my $last_pos  = pos( $text ) || 0;
     my $end_pos   = length( $text ) - 1;
     my $remainder = substr( $text, $last_pos );
     push @pod_pieces, { 
