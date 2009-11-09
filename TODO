@@ -1,0 +1,16 @@
+Things I should add to this module before releasing it...
+
+1. Make sure the 'pos' field in the output hashes are truly the last character of that paragraph.
+2. Add a 'start_pos' field to the hash to indicate the starting character of the paragraph
+3. If 'start_pos' works, change 'pos' to 'end_pos'
+4. Possibly calculate the beginning and ending lines within the text... make it an option for users who want it.
+4a. Make it an option to the main parse method and add a method that does it by default?
+5. Make an option/additional method to *extract* the pod from the passed in text.
+5a. question - should I require the text be a ref that gets modified or should I return it in the data???
+
+Other possible things to do...
+Split the regexes up in such a way that a user can feed in an array of lines, and/or do "lazy parsing"
+
+However, I think that's going to be too much effort for too little reward given 90% of use-cases.
+
+Another possibility, add helper option to pass a filename instead of a raw string and have it open and parse that file.
