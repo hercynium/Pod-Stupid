@@ -1,4 +1,4 @@
-package SRS::Pod::Parser;
+package Pod::Simplest;
 
 use strict;
 use warnings;
@@ -7,7 +7,84 @@ use Carp qw( croak );
 use Exporter;
 our @ISA = qw( Exporter );
 our @EXPORT = qw();
-our @EXPORT_OK = qw( parse_pod_from_string );
+our @EXPORT_OK = qw( parse_string strip_string );
+
+=head1 NAME
+
+Pod::Simplest - The simplest 'pod parser' possible
+
+=head1 SYNOPSIS
+
+  #!/usr/bin/perl
+  
+  use strict;
+  use warnings;
+  use Data::Dumper;
+
+  # optional exports
+  use Pod::Simplest qw( parse_string strip_string );
+
+  my $file = '/some/file/with/pod.pl';
+  my $text = do { local( @ARGV, $/ ) = $file; <> }; # slurp
+
+  # in list context also returns the text stripped of pod
+  my ($pieces, $stripped_text) = parse_string( $text );
+
+  ## if you prefer an object, this will work as well
+  # my $parser = Pod::Simplest->new();
+  # my ($pieces, $stripped_text) = $parser->parse_string( $text );
+
+  # inspect the generated AoH...
+  print Dumper $pieces;
+
+  # reconstruct the original text from the pieces...
+  substr( $stripped_text, $_->{start_pos}, 0, $_->{orig_text} )
+      for grep { ! exists $_->{non_pod} } @$pieces;
+
+  print $stripped_text eq $text ? "ok - $file\n" : "not ok - $file\n";
+
+
+=head1 DESCRIPTION 
+
+This module was written to do one B<simple> thing: Given some text
+as input, split it up into pieces of Pod L<paragraphs> and Non-Pod 
+"whatever" and output an AoH describing each piece found, in order.
+
+The end user can do whatever s?he whishes with the output AoH. It is 
+trivially simple to reconstruct the input from the output, and 
+hopefully I've included enough information in the inner hashes that
+one can easily perform just about any other manipulation desired.
+
+=head1 INDESCRIPTION
+
+There are a bunch of things this module will B<NOT> do:
+
+=over
+
+=item * Create a "parse tree"
+
+=item * Pod validation (it either parses or not)
+
+=item * Pod cleanup
+
+=item * Feed your cat
+
+=back
+
+However, it may make it easier to do any of the above, with a lot 
+less time and effort spent trying to grok many of the other Pod 
+parsing solutions out there.
+
+A particular design decision I've made is to avoid needing to save 
+any state. This means there's no need or advantage to using this
+module's OO interface, except your own preferences. This also 
+should discourage me from trying to bloat Pod::Simplest with 
+every feature that tickles my fancy (or yours!)
+
+=head1 METHODS
+
+=cut
+
 
 
 # right now, I've hard-coded unix EOL into these regexen... I probably
@@ -16,22 +93,16 @@ our @EXPORT_OK = qw( parse_pod_from_string );
 my $eol = qr{ (?>\x0D\x0A?|[\x0A-\x0C\x85\x{2028}\x{2029}]) };
 
 
-=for comment
-
-match the end of any pod paragraph (pp). I'm being generous by allowing
-a pp to end by detecting another command pp with the lookahead thus not
-enforcing the "must end with blank line" part of the spec.
-=cut
+# match the end of any pod paragraph (pp). I'm being generous by allowing
+# a pp to end by detecting another command pp with the lookahead thus not
+# enforcing the "must end with blank line" part of the spec.
 my $pod_paragraph_end_qr = qr{ (?: [\n]{2,} | [\n]+(?= ^=\w+) | \z ) }msx;
 
-=for comment
-
-match a command paragraph. Note: the 'cut' directive is handled
-specially because it signifies the end of a block of pod and the
-spec states that it need not be followed by a blank line. If any
-other directives should be parsed the same way, put them in the
-qw() list below. Still, only 'cut' will end a block of pod.
-=cut
+# match a command paragraph. Note: the 'cut' directive is handled
+# specially because it signifies the end of a block of pod and the
+# spec states that it need not be followed by a blank line. If any
+# other directives should be parsed the same way, put them in the
+# qw() list below. Still, only 'cut' will end a block of pod.
 my $cut_like_cmds_qr = join '|', qw( cut );
 my $pod_command_qr = qr{
     (                        # capture everything as $1
@@ -64,11 +135,8 @@ my $pod_command_qr = qr{
     )
 }msx;
 
-=for comment
-
-match a non-command paragraph. this only applies when
-already within a pod block.
-=cut
+# match a non-command paragraph. this only applies when
+# already within a pod block.
 my $pod_paragraph_qr = qr{
     (               # grab everything as $1...
       (               # but just the paragraph contents as $2
@@ -80,7 +148,7 @@ my $pod_paragraph_qr = qr{
     )
 }msx;
 
-=head2 parse_pod_from_string
+=head2 parse_string
 
 Given a string, parses for pod and, in scalar context, returns an AoH
 describing each pod paragraph found, as well as any non-pod. In list context,
@@ -94,11 +162,11 @@ a copy of the original string with all pod stripped out is also returned.
  my @non_pod_pieces = grep {   exists $_->{non_pod} } @$pieces;
 
  # if you want a copy of the text sans pod...
- my ( $pieces, $txt_nopod ) = parse_pod_from_string( $text );
+ my ( $pieces, $txt_nopod ) = parse_string( $text );
 
 =cut
 # NOTE: the 'c' modifiers on the regexes in this sub are *critical!* NO TOUCH!
-sub parse_pod_from_string {
+sub parse_string {
     my ( $text ) = @_;
 
     croak "missing \$text parameter" if ! defined $text;
@@ -161,14 +229,14 @@ sub parse_pod_from_string {
 
 
     if ( wantarray ) {
-        strip_pod_from_string( \$text, \@pod_pieces );
+        strip_string( \$text, \@pod_pieces );
         return ( \@pod_pieces, $text );
     }
     return \@pod_pieces;
 }
 
 
-=head2 strip_pod_from_string
+=head2 strip_string
 
 given a string or string ref, and (optionally) an array of pod pieces,
 return a copy of the string with all pod stripped out and an AoH
@@ -177,25 +245,25 @@ modified in-place. In any case you can still always get the stripped
 string and the array of pod parts as return values.
 
   # most typical usage
-  my $txt_nopod = strip_pod_from_string( $text );
+  my $txt_nopod = strip_string( $text );
   
   # pass in a ref to change string in-place...
-  strip_pod_from_string( \$text );   # $text no longer contains any pod
+  strip_string( \$text );   # $text no longer contains any pod
   
   # if you need the pieces...
-  my ( $txt_nopod, $pieces ) = strip_pod_from_string( $text );
+  my ( $txt_nopod, $pieces ) = strip_string( $text );
   
   # if you already have the pod pieces...
-  my $txt_nopod = strip_pod_from_string( $text, $pod_pieces );
+  my $txt_nopod = strip_string( $text, $pod_pieces );
 
 =cut
-sub strip_pod_from_string {
+sub strip_string {
     my ( $text_ref, $pod_pieces ) = @_;
 
     croak "missing \$text_ref parameter" unless defined $text_ref;
     $text_ref = \$text_ref unless ref $text_ref;
 
-    $pod_pieces = parse_pod_from_string( $$text_ref ) unless ref $pod_pieces;
+    $pod_pieces = parse_string( $$text_ref ) unless ref $pod_pieces;
 
     my $shrinkage = 0;
     for my $pp ( @$pod_pieces ) {
@@ -217,7 +285,7 @@ __END__
 
 =head1 POD TERMINOLOGY
 
-=head2 paragraph
+=head2 paragraphs
 
 In Pod, everything is a paragraph. A paragraph is simply one or more
 consecutive lines of text. Multiple paragraphs are separated from each other
@@ -228,7 +296,11 @@ Some paragraphs have special meanings, as explained below.
 =head2 command
 
 A command (aka directive) is a paragraph whose first line begins with a
-character sequence matching the regex m/\A=([a-zA-Z]\S*)/
+character sequence matching the regex m/^=([a-zA-Z]\S*)/
+
+I've actually been a bit more generous, matching m/^=(\w+)/ instead. 
+Don't rely on that though. I may have to change to be closer to the spec 
+someday.
 
 In the above regex, the type of command would be in $1. Different types of
 commands have different semantics and validation rules yadda yadda.

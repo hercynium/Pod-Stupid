@@ -5,13 +5,13 @@ use warnings;
 
 use File::Slurp qw( read_file );
 use Data::Dumper qw( Dumper );
-use SRS::Pod::Parser qw( parse_pod_from_string );
+use Pod::Simplest qw( parse_string );
 
 # for each file, parse out the pod, then insert it back into the 
 # stripped version and assert they're the same.
 for my $file ( @ARGV ) {
     my $text = read_file( $file );
-    my ( $pieces, $stripped_text ) = parse_pod_from_string( $text );
+    my ( $pieces, $stripped_text ) = parse_string( $text );
 
 #    print Dumper $pieces;
 #    print $stripped_text;
