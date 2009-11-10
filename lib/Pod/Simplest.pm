@@ -154,15 +154,15 @@ Given a string, parses for pod and, in scalar context, returns an AoH
 describing each pod paragraph found, as well as any non-pod. In list context,
 a copy of the original string with all pod stripped out is also returned.
 
- # typical usage
- my $pieces = parse_pod_from_string( $text );
-
- # to separate pod and non-pod
- my @pod_pieces     = grep { ! exists $_->{non_pod} } @$pieces;
- my @non_pod_pieces = grep {   exists $_->{non_pod} } @$pieces;
-
- # if you want a copy of the text sans pod...
- my ( $pieces, $txt_nopod ) = parse_string( $text );
+  # typical usage
+  my $pieces = parse__string( $text );
+  
+  # to separate pod and non-pod
+  my @pod_pieces     = grep { ! exists $_->{non_pod} } @$pieces;
+  my @non_pod_pieces = grep {   exists $_->{non_pod} } @$pieces;
+  
+  # if you want a copy of the text sans pod...
+  my ( $pieces, $txt_nopod ) = parse_string( $text );
 
 =cut
 # NOTE: the 'c' modifiers on the regexes in this sub are *critical!* NO TOUCH!
@@ -177,25 +177,28 @@ sub parse_string {
     # find the beginning of the next pod block in the text
     # (which, by definition, is any pod command)
     while ( $text =~ m{ \G (.*?) $pod_command_qr }msxgc ) {
-        my $non_pod   = $1;
-        my $cmd_type  = $3 || $6;
-        my $cmd_level = $4 || '';
-        my $cmd_text  = $5 || $7 || '';
+        my $non_pod_txt = $1;
+        my $pod_txt     = $2;
+        my $cmd_type    = $3 || $6;
+        my $cmd_level   = $4 || '';
+        my $cmd_text    = $5 || $7 || '';
 
         #print "COMMAND: [=$cmd_type$cmd_level $cmd_text]\n\n"; ### DEBUG
 
         # record the text that wasn't pod, if any
         push @pod_pieces, { 
-            non_pod   => $non_pod,
+            non_pod   => 1,
+            orig_txt  => $non_pod_txt,
             start_pos => $LAST_MATCH_START[1],
             end_pos   => $LAST_MATCH_END[1],
-        } if $non_pod;
+        } if $non_pod_txt;
 
         # record the pod found
         push @pod_pieces, {
             cmd_type  => $cmd_type,
             cmd_level => $cmd_level,
-            cmd_text  => $cmd_text,
+            cmd_txt   => $cmd_text,
+            orig_txt  => $pod_txt,
             start_pos => $LAST_MATCH_START[2],
             end_pos   => $LAST_MATCH_END[2],
         };
@@ -205,12 +208,14 @@ sub parse_string {
 
         # look for paragraphs within the current pod block
         while ( $text =~ m{ \G $pod_paragraph_qr }msxgc ) {
+            my $orig_txt  = $1;
             my $paragraph = $2;
 
             #print "PARAGRAPH: [$paragraph]\n\n"; ### DEBUG
 
             push @pod_pieces, {
                 paragraph => $paragraph,
+                orig_txt  => $orig_txt,
                 start_pos => $LAST_MATCH_START[1],
                 end_pos   => $LAST_MATCH_END[1],
             };
@@ -222,7 +227,8 @@ sub parse_string {
     my $end_pos   = length( $text ) - 1;
     my $remainder = substr( $text, $last_pos );
     push @pod_pieces, { 
-        non_pod   => $remainder,
+        non_pod   => 1,
+        orig_txt  => $remainder,
         start_pos => $last_pos,
         end_pos   => $end_pos,
     } if $remainder;
@@ -272,8 +278,8 @@ sub strip_string {
 
         my $length      = $pp->{end_pos}   - $pp->{start_pos};
         my $new_start   = $pp->{start_pos} - $shrinkage;
-        $pp->{orig_pod} = substr( $$text_ref, $new_start, $length, '' );
-        $shrinkage     += $length;
+        $pp->{orig_txt} = substr( $$text_ref, $new_start, $length, '' );
+        $shrinkage      += $length;
     }
     return $$text_ref, $pod_pieces;
 }
@@ -283,7 +289,7 @@ sub strip_string {
 
 __END__
 
-=head1 POD TERMINOLOGY
+=head1 POD TERMINOLOGY FOR DUMMIES (aka: me)
 
 =head2 paragraphs
 
@@ -367,5 +373,47 @@ on a parsed piece of the original string. Each piece is either pod or not pod.
 If it's pod it describes the kind of pod. If it's not, it contains a 'non_pod' 
 entry. All pieces also include the start and end offsets into the original 
 string (starting at 0) as 'start_pos' and 'end_pos', respectively.
+
+
+=head1 BUGS
+
+=over
+
+=item * Currently only works on files with unix-style line endings.
+
+=back
+
+=head1 TODO
+
+This is only what I've thought of... B<suggestions *very* welcome!!!>
+
+=over
+
+=item * Fix aforementioned bug
+
+=item * Comprehensive tests
+
+=item * A utility module to do common things with the output
+
+=back
+
+=head1 CREDITS
+
+Uri Guttman for giving me the task that led to my shaving this particular yak
+
+=head1 COPYRIGHT & LICENSE
+
+Copyright 2009, Stephen R. Scaffidi and licensed under the same terms as perl itself.
+
+=head1 AUTHOR
+
+Stephen R. Scaffidi sscaffidi@gmail.com
+
+=head1 SEE ALSO 
+
+Pod::Simple Pod::Parser Pod::Stripper and about a million others
+
+perlpod perlpodspec perldoc Pod::Escapes
+
 
 
