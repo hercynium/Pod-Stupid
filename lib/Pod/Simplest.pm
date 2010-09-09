@@ -156,7 +156,7 @@ describing each pod paragraph found, as well as any non-pod. In list context,
 a copy of the original string with all pod stripped out is also returned.
 
   # typical usage
-  my $pieces = parse__string( $text );
+  my $pieces = parse_string( $text );
   
   # to separate pod and non-pod
   my @pod_pieces     = grep { ! exists $_->{non_pod} } @$pieces;
