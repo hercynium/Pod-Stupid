@@ -5,6 +5,7 @@ use warnings;
 use English qw( -no_match_vars );
 use Carp qw( croak );
 use Exporter;
+#use Encode;
 our @ISA = qw( Exporter );
 our @EXPORT = qw();
 our @EXPORT_OK = qw( parse_string strip_string );
@@ -205,6 +206,14 @@ sub parse_string {
 
         # cut *always* signifies the end of a block of pod
         next if $cmd_type eq 'cut';
+
+        #if ( $cmd_type eq 'encoding' ) {
+        #    # change encoding of string - this feels wonky to me..
+        #    my $pos = pos( $text );
+        #    $cmd_text =~ s/\A\s*|\s*\z//gms;
+        #    $text = Encode::decode( $cmd_text, $text );
+        #    pos( $text ) = $pos;
+        #}
 
         # look for paragraphs within the current pod block
         while ( $text =~ m{ \G $pod_paragraph_qr }msxgc ) {
