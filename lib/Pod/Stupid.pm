@@ -288,7 +288,7 @@ parsing solutions out there.
 A particular design decision I've made is to avoid needing to save
 any state. This means there's no need or advantage to using this
 module's OO interface, except your own preferences. This also
-should discourage me from trying to bloat Pod::Simplest with
+should discourage me from trying to bloat Pod::Stupid with
 every feature that tickles my fancy (or yours!)
 
 

@@ -7,8 +7,9 @@ use Test::More;
 
 use File::Slurp qw( read_file );
 use Data::Dumper qw( Dumper );
-use Pod::Simplest qw( parse_string );
 use File::Basename qw( dirname );
+
+use Pod::Stupid qw( parse_string );
 
 # for each file, parse out the pod, then insert it back into the 
 # stripped version and assert they're the same.

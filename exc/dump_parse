@@ -9,7 +9,7 @@ use File::Spec::Functions qw( catdir updir );
 # use the libdir from the project root.
 use lib catdir( dirname($0), updir(), 'lib' );
 
-use Pod::Simplest qw( parse_string );
+use Pod::Stupid qw( parse_string );
 
 use Data::Dumper;
 
