@@ -5,12 +5,9 @@ package Pod::Stupid;
 
 use English qw( -no_match_vars );
 use Carp qw( croak );
-use Exporter;
+use Data::Dumper;
+use Scalar::Util qw( blessed );
 #use Encode;
-
-our @ISA = qw( Exporter );
-our @EXPORT = qw();
-our @EXPORT_OK = qw( parse_string strip_string );
 
 # right now, I've hard-coded unix EOL into these regexen... I probably
 # should use \R, however it's not supported on older perls, though the
@@ -73,32 +70,39 @@ my $pod_paragraph_qr = qr{
     )
 }msx;
 
+=method new
+
+the most basic object constructor possible. Currently takes no
+options because the object neither has nor needs to keep any state.
+
+This is only here if you want to use this module with an OO interface.
+
+=cut
+
+sub new { return bless {}, shift; }
+
 =method parse_string
 
 Given a string, parses for pod and, in scalar context, returns an AoH
-describing each pod paragraph found, as well as any non-pod. In list context,
-a copy of the original string with all pod stripped out is also returned.
+describing each pod paragraph found, as well as any non-pod.
 
   # typical usage
-  my $pieces = parse_string( $text );
+  my $pieces = $ps->parse_string( $text );
   
   # to separate pod and non-pod
-  my @pod_pieces     = grep { ! exists $_->{non_pod} } @$pieces;
-  my @non_pod_pieces = grep {   exists $_->{non_pod} } @$pieces;
-  
-  # if you want a copy of the text sans pod...
-  my ( $pieces, $txt_nopod ) = parse_string( $text );
+  my @pod_pieces     = grep { $_->{is_pod}  } @$pieces;
+  my @non_pod_pieces = grep { $_->{non_pod} } @$pieces;
 
 =cut
 
 # NOTE: the 'c' modifiers on the regexes in this sub are *critical!* NO TOUCH!
 sub parse_string {
-    my ( $text ) = @_;
+    my ($self, $text) = @_;
 
     croak "missing \$text parameter" if ! defined $text;
 
     # collect the parsed pieces here:
-    my @pod_pieces;
+    my @parsed_pieces;
 
     # find the beginning of the next pod block in the text
     # (which, by definition, is any pod command)
@@ -112,7 +116,7 @@ sub parse_string {
         #print "COMMAND: [=$cmd_type$cmd_level $cmd_text]\n\n"; ### DEBUG
 
         # record the text that wasn't pod, if any
-        push @pod_pieces, { 
+        push @parsed_pieces, { 
             non_pod   => 1,
             orig_txt  => $non_pod_txt,
             start_pos => $LAST_MATCH_START[1],
@@ -120,7 +124,8 @@ sub parse_string {
         } if $non_pod_txt;
 
         # record the pod found
-        push @pod_pieces, {
+        push @parsed_pieces, {
+            is_pod    => 1,
             cmd_type  => $cmd_type,
             cmd_level => $cmd_level,
             cmd_txt   => $cmd_text,
@@ -147,7 +152,8 @@ sub parse_string {
 
             #print "PARAGRAPH: [$paragraph]\n\n"; ### DEBUG
 
-            push @pod_pieces, {
+            push @parsed_pieces, {
+                is_pod    => 1,
                 paragraph => $paragraph,
                 orig_txt  => $orig_txt,
                 start_pos => $LAST_MATCH_START[1],
@@ -160,19 +166,14 @@ sub parse_string {
     my $last_pos  = pos( $text ) || 0;
     my $end_pos   = length( $text ) - 1;
     my $remainder = substr( $text, $last_pos );
-    push @pod_pieces, { 
+    push @parsed_pieces, {
         non_pod   => 1,
         orig_txt  => $remainder,
         start_pos => $last_pos,
         end_pos   => $end_pos,
     } if $remainder;
 
-
-    if ( wantarray ) {
-        strip_string( \$text, \@pod_pieces );
-        return ( \@pod_pieces, $text );
-    }
-    return \@pod_pieces;
+    return \@parsed_pieces;
 }
 
 
@@ -185,38 +186,42 @@ modified in-place. In any case you can still always get the stripped
 string and the array of pod parts as return values.
 
   # most typical usage
-  my $txt_nopod = strip_string( $text );
+  my $txt_nopod = $ps->strip_string( $text );
   
   # pass in a ref to change string in-place...
-  strip_string( \$text );   # $text no longer contains any pod
+  $ps->strip_string( \$text );   # $text no longer contains any pod
   
   # if you need the pieces...
-  my ( $txt_nopod, $pieces ) = strip_string( $text );
+  my ( $txt_nopod, $pieces ) = $ps->strip_string( $text );
   
   # if you already have the pod pieces...
-  my $txt_nopod = strip_string( $text, $pod_pieces );
+  my $txt_nopod = $ps->strip_string( $text, $pod_pieces );
 
 =cut
 
 sub strip_string {
-    my ( $text_ref, $pod_pieces ) = @_;
+    my ( $self, $text_ref, $pod_pieces ) = @_;
 
     croak "missing \$text_ref parameter" unless defined $text_ref;
-    $text_ref = \$text_ref unless ref $text_ref;
 
-    $pod_pieces = parse_string( $$text_ref ) unless ref $pod_pieces;
+    # make a copy of the text if necessary.
+    $text_ref = \"$text_ref" unless ref $text_ref;
+
+    # get the pieces if we don't already have them
+    $pod_pieces = $self->parse_string( $$text_ref ) unless ref $pod_pieces;
 
     my $shrinkage = 0;
     for my $pp ( @$pod_pieces ) {
 
-        next if defined $pp->{non_pod};
+        next unless $pp->{is_pod};
 
         my $length      = $pp->{end_pos}   - $pp->{start_pos};
         my $new_start   = $pp->{start_pos} - $shrinkage;
-        $pp->{orig_txt} = substr( $$text_ref, $new_start, $length, '' );
-        $shrinkage      += $length;
+        substr( $$text_ref, $new_start, $length, '' );
+
+        $shrinkage += $length;
     }
-    return $$text_ref, $pod_pieces;
+    return $$text_ref;
 }
 
 1 && q{Beauty is in the eye of the beholder}; # Truth.
@@ -225,42 +230,32 @@ __END__
 
 =head1 SYNOPSIS
 
-  #!/usr/bin/perl
+  use Pod::Stupid;
   
-  use strict;
-  use warnings;
-  use Data::Dumper;
+  my $file = shift; # '/some/file/with/pod.pl';
+  my $original_text = do { local( @ARGV, $/ ) = $file; <> }; # slurp
   
-  # optional exports
-  use Pod::Stupid qw( parse_string strip_string );
+  my $ps = Pod::Stupid->new();
   
-  my $file = '/some/file/with/pod.pl';
-  my $text = do { local( @ARGV, $/ ) = $file; <> }; # slurp
+  # in scalar context returns an array of hashes.
+  my $pieces = $ps->parse_string( $original_text );
   
-  # in list context also returns the text stripped of pod
-  my ($pieces, $stripped_text) = parse_string( $text );
-  
-  ## if you prefer an object, this will work as well
-  # my $parser = Pod::Stupid->new();
-  # my ($pieces, $stripped_text) = $parser->parse_string( $text );
-  
-  # inspect the generated AoH...
-  print Dumper $pieces;
+  # get your text sans all POD
+  my $stripped_text = $ps->strip_string( $original_text );
   
   # reconstruct the original text from the pieces...
-  substr( $stripped_text, $_->{start_pos}, 0, $_->{orig_text} )
-      for grep { ! exists $_->{non_pod} } @$pieces;
+  substr( $stripped_text, $_->{start_pos}, 0, $_->{orig_txt} )
+      for grep { $_->{is_pod} } @$pieces;
   
-  print $stripped_text eq $text ? "ok - $file\n" : "not ok - $file\n";
-
+  print $stripped_text eq $original_text ? "ok - $file\n" : "not ok - $file\n";
 
 =head1 DESCRIPTION
 
 This module was written to do one B<simple> thing: Given some text
-as input, split it up into pieces of Pod L<paragraphs> and Non-Pod
+as input, split it up into pieces of POD "paragraphs" and non-POD
 "whatever" and output an AoH describing each piece found, in order.
 
-The end user can do whatever s?he whishes with the output AoH. It is
+The end user can do whatever s?he wishes with the output AoH. It is
 trivially simple to reconstruct the input from the output, and
 hopefully I've included enough information in the inner hashes that
 one can easily perform just about any other manipulation desired.
@@ -269,27 +264,60 @@ one can easily perform just about any other manipulation desired.
 
 There are a bunch of things this module will B<NOT> do:
 
-=over
-
-=item * Create a "parse tree"
-
-=item * Pod validation (it either parses or not)
-
-=item * Pod cleanup
-
-=item * Feed your cat
-
-=back
+=for :list
+* Create a "parse tree"
+* Pod validation (it either parses or not)
+* Pod cleanup
+* "Handle" encoded text (but it I<should> still parse)
+* Feed your cat
 
 However, it may make it easier to do any of the above, with a lot
-less time and effort spent trying to grok many of the other Pod
+less time and effort spent trying to grok many of the other POD
 parsing solutions out there.
 
 A particular design decision I've made is to avoid needing to save
-any state. This means there's no need or advantage to using this
-module's OO interface, except your own preferences. This also
-should discourage me from trying to bloat Pod::Stupid with
-every feature that tickles my fancy (or yours!)
+any state. This means there's no need or advantage to instantiating
+an object, except for your own preferences. You can use any method
+as either an object method or a class method and it will work the
+same way for both. This design should also discourage me from trying
+to bloat Pod::Stupid with every feature that tickles my fancy (or
+yours!) but still, B<I encourage any feature requests!>
+
+=cut
+
+
+=head1 KNOWN LIMITATIONS
+
+=for :list
+* Currently only works on files with unix-style line endings.
+
+=head1 TODO
+
+This is only what I've thought of... B<suggestions *very* welcome!!!>
+
+=for :list
+* Fix aforementioned limitation
+* More comprehensive tests
+* A utility module to do common things with the output
+
+=head1 CREDITS
+
+Uri Guttman for giving me the task that led to my shaving this particular yak
+
+=head1 SEE ALSO
+
+=for :list
+* L<Pod::Simple>
+* L<Pod::Parser>
+* L<Pod::Stripper>
+* L<Pod::Escapes>
+* L<perlpod>
+* L<perlpodspec>
+* L<perldoc>
+* and about a million other things...
+
+=cut
+
 
 
 
@@ -308,8 +336,8 @@ Some paragraphs have special meanings, as explained below.
 A command (aka directive) is a paragraph whose first line begins with a
 character sequence matching the regex m/^=([a-zA-Z]\S*)/
 
-I've actually been a bit more generous, matching m/^=(\w+)/ instead. 
-Don't rely on that though. I may have to change to be closer to the spec 
+I've actually been a bit more generous, matching m/^=(\w+)/ instead.
+Don't rely on that though. I may have to change to be closer to the spec
 someday.
 
 In the above regex, the type of command would be in $1. Different types of
@@ -319,29 +347,17 @@ Currently, the following command types (directives) are described in the
 Pod Spec L<http://perldoc.perl.org/perlpodspec.html> and technically,
 a proper Pod parser should consider anything else an error. (I won't though)
 
-=over
-
-=item * head[\d] (\d is a number from 1-4)
-
-=item * pod
-
-=item * cut
-
-=item * over
-
-=item * item
-
-=item * back
-
-=item * begin
-
-=item * end
-
-=item * for
-
-=item * encoding
-
-=back
+=for :list
+* head[\d] (\d is a number from 1-4)
+* pod
+* cut
+* over
+* item
+* back
+* begin
+* end
+* for
+* encoding
 
 =head2 directive
 
@@ -373,48 +389,11 @@ end of the input, whichever comes first.
 =head2 piece
 
 This is a term I'm introducting myself. A piece is just a hash containing info
-on a parsed piece of the original string. Each piece is either pod or not pod. 
-If it's pod it describes the kind of pod. If it's not, it contains a 'non_pod' 
-entry. All pieces also include the start and end offsets into the original 
+on a parsed piece of the original string. Each piece is either pod or not pod.
+If it's pod it describes the kind of pod. If it's not, it contains a 'non_pod'
+entry. All pieces also include the start and end offsets into the original
 string (starting at 0) as 'start_pos' and 'end_pos', respectively.
 
+=cut
 
-
-
-
-=head1 BUGS
-
-=over
-
-=item * Currently only works on files with unix-style line endings.
-
-=back
-
-=head1 TODO
-
-This is only what I've thought of... B<suggestions *very* welcome!!!>
-
-=over
-
-=item * Fix aforementioned bug
-
-=item * Comprehensive tests
-
-=item * A utility module to do common things with the output
-
-=back
-
-=head1 CREDITS
-
-Uri Guttman for giving me the task that led to my shaving this particular yak
-
-=head1 COPYRIGHT & LICENSE
-
-Copyright 2009, Stephen R. Scaffidi and licensed under the same terms as perl itself.
-
-=head1 SEE ALSO
-
-Pod::Simple Pod::Parser Pod::Stripper and about a million others
-
-perlpod perlpodspec perldoc Pod::Escapes
 
