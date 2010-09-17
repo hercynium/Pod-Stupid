@@ -1,6 +1,8 @@
 use strict;
 use warnings;
 package Pod::Stupid;
+# ABSTRACT: The simplest, stupidest 'pod parser' possible
+
 use English qw( -no_match_vars );
 use Carp qw( croak );
 use Exporter;
@@ -9,84 +11,6 @@ use Exporter;
 our @ISA = qw( Exporter );
 our @EXPORT = qw();
 our @EXPORT_OK = qw( parse_string strip_string );
-
-=head1 NAME
-
-Pod::Simplest - The simplest 'pod parser' possible
-
-=head1 SYNOPSIS
-
-  #!/usr/bin/perl
-  
-  use strict;
-  use warnings;
-  use Data::Dumper;
-
-  # optional exports
-  use Pod::Simplest qw( parse_string strip_string );
-
-  my $file = '/some/file/with/pod.pl';
-  my $text = do { local( @ARGV, $/ ) = $file; <> }; # slurp
-
-  # in list context also returns the text stripped of pod
-  my ($pieces, $stripped_text) = parse_string( $text );
-
-  ## if you prefer an object, this will work as well
-  # my $parser = Pod::Simplest->new();
-  # my ($pieces, $stripped_text) = $parser->parse_string( $text );
-
-  # inspect the generated AoH...
-  print Dumper $pieces;
-
-  # reconstruct the original text from the pieces...
-  substr( $stripped_text, $_->{start_pos}, 0, $_->{orig_text} )
-      for grep { ! exists $_->{non_pod} } @$pieces;
-
-  print $stripped_text eq $text ? "ok - $file\n" : "not ok - $file\n";
-
-
-=head1 DESCRIPTION 
-
-This module was written to do one B<simple> thing: Given some text
-as input, split it up into pieces of Pod L<paragraphs> and Non-Pod 
-"whatever" and output an AoH describing each piece found, in order.
-
-The end user can do whatever s?he whishes with the output AoH. It is 
-trivially simple to reconstruct the input from the output, and 
-hopefully I've included enough information in the inner hashes that
-one can easily perform just about any other manipulation desired.
-
-=head1 INDESCRIPTION
-
-There are a bunch of things this module will B<NOT> do:
-
-=over
-
-=item * Create a "parse tree"
-
-=item * Pod validation (it either parses or not)
-
-=item * Pod cleanup
-
-=item * Feed your cat
-
-=back
-
-However, it may make it easier to do any of the above, with a lot 
-less time and effort spent trying to grok many of the other Pod 
-parsing solutions out there.
-
-A particular design decision I've made is to avoid needing to save 
-any state. This means there's no need or advantage to using this
-module's OO interface, except your own preferences. This also 
-should discourage me from trying to bloat Pod::Simplest with 
-every feature that tickles my fancy (or yours!)
-
-=head1 METHODS
-
-=cut
-
-
 
 # right now, I've hard-coded unix EOL into these regexen... I probably
 # should use \R, however it's not supported on older perls, though the
@@ -149,7 +73,7 @@ my $pod_paragraph_qr = qr{
     )
 }msx;
 
-=head2 parse_string
+=method parse_string
 
 Given a string, parses for pod and, in scalar context, returns an AoH
 describing each pod paragraph found, as well as any non-pod. In list context,
@@ -166,6 +90,7 @@ a copy of the original string with all pod stripped out is also returned.
   my ( $pieces, $txt_nopod ) = parse_string( $text );
 
 =cut
+
 # NOTE: the 'c' modifiers on the regexes in this sub are *critical!* NO TOUCH!
 sub parse_string {
     my ( $text ) = @_;
@@ -251,7 +176,7 @@ sub parse_string {
 }
 
 
-=head2 strip_string
+=method strip_string
 
 given a string or string ref, and (optionally) an array of pod pieces,
 return a copy of the string with all pod stripped out and an AoH
@@ -272,6 +197,7 @@ string and the array of pod parts as return values.
   my $txt_nopod = strip_string( $text, $pod_pieces );
 
 =cut
+
 sub strip_string {
     my ( $text_ref, $pod_pieces ) = @_;
 
@@ -296,6 +222,76 @@ sub strip_string {
 1 && q{Beauty is in the eye of the beholder}; # Truth.
 
 __END__
+
+=head1 SYNOPSIS
+
+  #!/usr/bin/perl
+  
+  use strict;
+  use warnings;
+  use Data::Dumper;
+  
+  # optional exports
+  use Pod::Stupid qw( parse_string strip_string );
+  
+  my $file = '/some/file/with/pod.pl';
+  my $text = do { local( @ARGV, $/ ) = $file; <> }; # slurp
+  
+  # in list context also returns the text stripped of pod
+  my ($pieces, $stripped_text) = parse_string( $text );
+  
+  ## if you prefer an object, this will work as well
+  # my $parser = Pod::Stupid->new();
+  # my ($pieces, $stripped_text) = $parser->parse_string( $text );
+  
+  # inspect the generated AoH...
+  print Dumper $pieces;
+  
+  # reconstruct the original text from the pieces...
+  substr( $stripped_text, $_->{start_pos}, 0, $_->{orig_text} )
+      for grep { ! exists $_->{non_pod} } @$pieces;
+  
+  print $stripped_text eq $text ? "ok - $file\n" : "not ok - $file\n";
+
+
+=head1 DESCRIPTION
+
+This module was written to do one B<simple> thing: Given some text
+as input, split it up into pieces of Pod L<paragraphs> and Non-Pod
+"whatever" and output an AoH describing each piece found, in order.
+
+The end user can do whatever s?he whishes with the output AoH. It is
+trivially simple to reconstruct the input from the output, and
+hopefully I've included enough information in the inner hashes that
+one can easily perform just about any other manipulation desired.
+
+=head1 INDESCRIPTION
+
+There are a bunch of things this module will B<NOT> do:
+
+=over
+
+=item * Create a "parse tree"
+
+=item * Pod validation (it either parses or not)
+
+=item * Pod cleanup
+
+=item * Feed your cat
+
+=back
+
+However, it may make it easier to do any of the above, with a lot
+less time and effort spent trying to grok many of the other Pod
+parsing solutions out there.
+
+A particular design decision I've made is to avoid needing to save
+any state. This means there's no need or advantage to using this
+module's OO interface, except your own preferences. This also
+should discourage me from trying to bloat Pod::Simplest with
+every feature that tickles my fancy (or yours!)
+
+
 
 =head1 POD TERMINOLOGY FOR DUMMIES (aka: me)
 
@@ -383,6 +379,9 @@ entry. All pieces also include the start and end offsets into the original
 string (starting at 0) as 'start_pos' and 'end_pos', respectively.
 
 
+
+
+
 =head1 BUGS
 
 =over
@@ -413,15 +412,9 @@ Uri Guttman for giving me the task that led to my shaving this particular yak
 
 Copyright 2009, Stephen R. Scaffidi and licensed under the same terms as perl itself.
 
-=head1 AUTHOR
-
-Stephen R. Scaffidi sscaffidi@gmail.com
-
-=head1 SEE ALSO 
+=head1 SEE ALSO
 
 Pod::Simple Pod::Parser Pod::Stripper and about a million others
 
 perlpod perlpodspec perldoc Pod::Escapes
-
-
 
