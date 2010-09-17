@@ -1,6 +1,9 @@
 Revision history for Pod-Stupid
 
 {{$NEXT}}
+    * fiddling with dzil's git stuff again
+
+0.002     2010-09-17 17:13:00 EST5EDT
     * initial release, fairly alpha, but seems to work.
 
 ### End
