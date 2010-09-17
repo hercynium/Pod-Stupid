@@ -2,7 +2,7 @@ NAME
     Pod::Stupid - The simplest, stupidest 'pod parser' possible
 
 VERSION
-    version 0.004
+    version 0.005
 
 SYNOPSIS
       use Pod::Stupid;
