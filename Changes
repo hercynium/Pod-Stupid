@@ -1,6 +1,10 @@
 Revision history for Pod-Stupid
 
 {{$NEXT}}
+
+0.004     2010-09-17 17:29:09 EST5EDT
+
+0.003     2010-09-17 17:19:54 EST5EDT
     * fiddling with dzil's git stuff again
 
 0.002     2010-09-17 17:13:00 EST5EDT
