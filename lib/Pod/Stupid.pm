@@ -1,11 +1,11 @@
-package Pod::Simplest;
-
 use strict;
 use warnings;
+package Pod::Stupid;
 use English qw( -no_match_vars );
 use Carp qw( croak );
 use Exporter;
 #use Encode;
+
 our @ISA = qw( Exporter );
 our @EXPORT = qw();
 our @EXPORT_OK = qw( parse_string strip_string );
@@ -282,7 +282,7 @@ sub strip_string {
 
     my $shrinkage = 0;
     for my $pp ( @$pod_pieces ) {
-        
+
         next if defined $pp->{non_pod};
 
         my $length      = $pp->{end_pos}   - $pp->{start_pos};
@@ -293,8 +293,7 @@ sub strip_string {
     return $$text_ref, $pod_pieces;
 }
 
-1;
-
+1 && q{Beauty is in the eye of the beholder}; # Truth.
 
 __END__
 
